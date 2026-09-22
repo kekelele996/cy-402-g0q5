@@ -48,6 +48,17 @@ func (r *DocumentRepository) ListByCase(caseID uint64) ([]model.Document, error)
 	return list, nil
 }
 
+// CountByCaseAndType 统计某案件指定类型的文档数量。
+func (r *DocumentRepository) CountByCaseAndType(caseID uint64, fileType string) (int64, error) {
+	var count int64
+	if err := r.db.Model(&model.Document{}).
+		Where("case_id = ? AND file_type = ?", caseID, fileType).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count documents by case and type: %w", err)
+	}
+	return count, nil
+}
+
 // List 分页查询文档，支持类型/关键词筛选。
 func (r *DocumentRepository) List(page, pageSize int, fileType, keyword string) ([]model.Document, int64, error) {
 	var list []model.Document

@@ -54,3 +54,13 @@ const (
 
 // DocumentFileTypeValues 全部文档类型值。
 var DocumentFileTypeValues = []string{DocTypeComplaint, DocTypeDefense, DocTypeEvidence, DocTypeJudgment, DocTypeContract, DocTypeOther}
+
+// DocTypeText 文档类型中文文案（与前端 frontend/src/constants/document.ts 保持一致）。
+var DocTypeText = map[string]string{
+	DocTypeComplaint: "起诉状",
+	DocTypeDefense:   "答辩状",
+	DocTypeEvidence:  "证据",
+	DocTypeJudgment:  "判决书",
+	DocTypeContract:  "合同",
+	DocTypeOther:     "其他",
+}

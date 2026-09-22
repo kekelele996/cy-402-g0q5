@@ -12,6 +12,7 @@ const (
 	MsgUsernameExists        = "用户名已存在"
 	MsgInvalidCredentials    = "用户名或密码错误"
 	MsgCaseStatusConflict    = "案件状态流转冲突"
+	MsgCaseCloseBlocked      = "案件结案条件未满足"
 	MsgBillingStatusConflict = "账单状态流转冲突"
 	MsgUploadTooLarge        = "上传文件过大"
 	MsgUnsupportedFileType   = "不支持的文件类型"

@@ -152,6 +152,10 @@ func (h *CaseHandler) wrapError(c *gin.Context, err error, ctx string) {
 	if errors.As(err, &appErr) {
 		c.Set("audit_detail", appErr.Message)
 		h.logger.Warn("case handler error", "context", ctx, "error", appErr.Error())
+		if appErr.Data != nil {
+			FailWithData(c, appErrorStatus(appErr.Code), appErr.Code, appErr.Message, appErr.Data)
+			return
+		}
 		Fail(c, appErrorStatus(appErr.Code), appErr.Code, appErr.Message)
 		return
 	}

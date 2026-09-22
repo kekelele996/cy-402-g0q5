@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Tabs, Button, Select, Space, message, Tag } from 'antd'
+import { Card, Descriptions, Tabs, Button, Select, Space, message, Tag, Alert } from 'antd'
 import { getCase, changeCaseStatus, assignLawyer } from '@/api/case'
 import { getClient } from '@/api/client'
 import DocumentList from '@/components/common/DocumentList'
@@ -11,7 +11,10 @@ import TimelineItem from '@/components/common/TimelineItem'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useBillingStore } from '@/stores/billingStore'
 import { useUserStore } from '@/stores/userStore'
-import { CaseStatusOptions, CaseTypeOptions } from '@/constants/case'
+import { CaseStatus, CaseStatusOptions, CaseTypeOptions } from '@/constants/case'
+import { BillingStatus } from '@/constants/billing'
+import { DocumentTypeText } from '@/constants/document'
+import { formatAmount } from '@/utils/amountFormatter'
 import type { CaseItem, Client } from '@/types'
 
 export default function CaseDetail() {
@@ -58,6 +61,20 @@ export default function CaseDetail() {
 
   if (!item) return null
 
+  // 结案前置校验（与后端一致）：需已上传判决书且无待支付账单。
+  const hasJudgment = docStore.byCase.some((d) => d.file_type === 'judgment')
+  const pendingBills = billingStore.byCase.filter((b) => b.status === BillingStatus.PENDING)
+  const pendingTotal = pendingBills.reduce((sum, b) => sum + Number(b.amount), 0)
+  const closeBlockers: string[] = []
+  if (!hasJudgment) {
+    closeBlockers.push(`缺少材料：${DocumentTypeText.judgment}`)
+  }
+  if (pendingBills.length > 0) {
+    closeBlockers.push(`待支付账单 ${pendingBills.length} 笔，合计 ${formatAmount(pendingTotal)}`)
+  }
+  const closeBlocked = closeBlockers.length > 0
+  const isClosing = status === CaseStatus.CLOSED && item.status !== CaseStatus.CLOSED
+
   return (
     <Card>
       <Space style={{ marginBottom: 16 }}>
@@ -84,8 +101,23 @@ export default function CaseDetail() {
                 <PermissionGuard roles={['admin', 'lawyer']}>
                   <Space style={{ marginTop: 16 }}>
                     <Select value={status} style={{ width: 150 }} options={CaseStatusOptions} onChange={setStatus} />
-                    <Button type="primary" onClick={onStatusChange}>更新状态</Button>
+                    <Button type="primary" onClick={onStatusChange} disabled={isClosing && closeBlocked}>更新状态</Button>
                   </Space>
+                  {closeBlocked && item.status !== CaseStatus.CLOSED && (
+                    <Alert
+                      style={{ marginTop: 8, maxWidth: 480 }}
+                      type="warning"
+                      showIcon
+                      message="暂不满足结案条件"
+                      description={
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {closeBlockers.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      }
+                    />
+                  )}
                   <Space style={{ marginTop: 8 }}>
                     <Select
                       placeholder="分配主办律师"

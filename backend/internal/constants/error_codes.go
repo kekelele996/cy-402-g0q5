@@ -15,6 +15,7 @@ const (
 	CodeInvalidCredentials    = 40101
 	CodeCaseStatusConflict    = 40901
 	CodeBillingStatusConflict = 40902
+	CodeCaseCloseBlocked      = 40903
 	CodeUploadTooLarge        = 41300
 	CodeUnsupportedType       = 41500
 )

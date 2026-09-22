@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"cylawcase/internal/constants"
@@ -14,16 +15,48 @@ import (
 
 // CaseService 案件业务逻辑。
 type CaseService struct {
-	repo       *repository.CaseRepository
-	clientRepo *repository.ClientRepository
-	userRepo   *repository.UserRepository
-	logger     *slog.Logger
+	repo         *repository.CaseRepository
+	clientRepo   *repository.ClientRepository
+	userRepo     *repository.UserRepository
+	documentRepo *repository.DocumentRepository
+	billingRepo  *repository.BillingRepository
+	logger       *slog.Logger
 }
 
 // NewCaseService 构造案件服务。
 func NewCaseService(repo *repository.CaseRepository, clientRepo *repository.ClientRepository,
-	userRepo *repository.UserRepository, logger *slog.Logger) *CaseService {
-	return &CaseService{repo: repo, clientRepo: clientRepo, userRepo: userRepo, logger: logger}
+	userRepo *repository.UserRepository, documentRepo *repository.DocumentRepository,
+	billingRepo *repository.BillingRepository, logger *slog.Logger) *CaseService {
+	return &CaseService{repo: repo, clientRepo: clientRepo, userRepo: userRepo,
+		documentRepo: documentRepo, billingRepo: billingRepo, logger: logger}
+}
+
+// CaseCloseBlockInfo 结案校验未通过时的阻塞详情。
+type CaseCloseBlockInfo struct {
+	MissingMaterials []string `json:"missing_materials"`
+	PendingBillCount int64    `json:"pending_bill_count"`
+	PendingBillTotal float64  `json:"pending_bill_total"`
+}
+
+// Blocked 是否存在阻塞项。
+func (b *CaseCloseBlockInfo) Blocked() bool {
+	return len(b.MissingMaterials) > 0 || b.PendingBillCount > 0
+}
+
+// Message 生成可读的阻塞原因说明。
+func (b *CaseCloseBlockInfo) Message() string {
+	var parts []string
+	if len(b.MissingMaterials) > 0 {
+		names := make([]string, 0, len(b.MissingMaterials))
+		for _, m := range b.MissingMaterials {
+			names = append(names, constants.DocTypeText[m])
+		}
+		parts = append(parts, "缺少"+strings.Join(names, "、"))
+	}
+	if b.PendingBillCount > 0 {
+		parts = append(parts, fmt.Sprintf("待支付账单 %d 笔，合计 ¥%s", b.PendingBillCount, util.FormatAmount(b.PendingBillTotal)))
+	}
+	return constants.MsgCaseCloseBlocked + "：" + strings.Join(parts, "；")
 }
 
 // Create 创建案件。
@@ -92,6 +125,18 @@ func (s *CaseService) ChangeStatus(id uint64, operatorRole string, status string
 	if operatorRole != constants.RoleAdmin && !canFlow(c.Status, status) {
 		return nil, util.NewAppError(constants.CodeCaseStatusConflict, "Case[id="+u64(id)+"] status conflict: "+c.Status+" -> "+status)
 	}
+	// 结案前置校验：对所有角色（含管理员）生效，任一条件不满足则整次拒绝，不改动任何数据。
+	if status == constants.CaseStatusClosed && c.Status != constants.CaseStatusClosed {
+		block, err := s.closeBlockInfo(id)
+		if err != nil {
+			return nil, util.Wrap(err, "Case[id=%d] close check failed", id)
+		}
+		if block.Blocked() {
+			s.logger.Warn(constants.LogCaseCloseBlocked, "case_id", id,
+				"missing_materials", block.MissingMaterials, "pending_bill_count", block.PendingBillCount)
+			return nil, util.NewAppErrorWithData(constants.CodeCaseCloseBlocked, block.Message(), block)
+		}
+	}
 	c.Status = status
 	if status == constants.CaseStatusClosed && c.CloseDate == nil {
 		now := time.Now()
@@ -134,6 +179,25 @@ func (s *CaseService) List(page, pageSize int, caseType, status string, lawyerID
 // Get 案件详情。
 func (s *CaseService) Get(id uint64) (*model.Case, error) {
 	return s.repo.FindByID(id)
+}
+
+// closeBlockInfo 汇总结案阻塞项：缺少判决书、存在待支付账单。
+func (s *CaseService) closeBlockInfo(caseID uint64) (*CaseCloseBlockInfo, error) {
+	info := &CaseCloseBlockInfo{MissingMaterials: []string{}}
+	judgmentCount, err := s.documentRepo.CountByCaseAndType(caseID, constants.DocTypeJudgment)
+	if err != nil {
+		return nil, err
+	}
+	if judgmentCount == 0 {
+		info.MissingMaterials = append(info.MissingMaterials, constants.DocTypeJudgment)
+	}
+	pendingCount, pendingTotal, err := s.billingRepo.PendingStatsByCase(caseID)
+	if err != nil {
+		return nil, err
+	}
+	info.PendingBillCount = pendingCount
+	info.PendingBillTotal = pendingTotal
+	return info, nil
 }
 
 // canFlow 案件状态机：filed->investigating->hearing->closed->archived，允许回退到上一步。
