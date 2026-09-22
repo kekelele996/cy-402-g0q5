@@ -12,6 +12,7 @@ func (r *Router) registerCaseRoutes(g *gin.RouterGroup) {
 	cases.Use(middleware.AuthRequired(r.cfg))
 	cases.GET("", r.caseH.List)
 	cases.GET("/:id", r.caseH.Get)
+	cases.GET("/:id/close-check", r.caseH.CloseCheck)
 	cases.POST("", r.caseH.Create)
 	cases.PUT("/:id", r.caseH.Update)
 	cases.POST("/:id/status", r.caseH.ChangeStatus)

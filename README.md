@@ -146,7 +146,8 @@ cy-402/
 | POST | /api/v1/cases | 创建案件 |
 | GET | /api/v1/cases/:id | 案件详情 |
 | PUT | /api/v1/cases/:id | 更新案件 |
-| POST | /api/v1/cases/:id/status | 案件状态流转 |
+| POST | /api/v1/cases/:id/status | 案件状态流转（转 closed 前强制校验：已上传判决书且无待支付账单，管理员同样不可豁免） |
+| GET | /api/v1/cases/:id/close-check | 结案前置校验：返回缺少的材料、待支付账单笔数/金额合计与阻塞原因 |
 | POST | /api/v1/cases/:id/assign | 分配主办律师 |
 | GET | /api/v1/documents | 文档中心分页列表 |
 | POST | /api/v1/documents | 上传文档记录 |

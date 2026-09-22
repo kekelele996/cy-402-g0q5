@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Tabs, Button, Select, Space, message, Tag } from 'antd'
-import { getCase, changeCaseStatus, assignLawyer } from '@/api/case'
+import { Card, Descriptions, Tabs, Button, Select, Space, message, Tag, Alert } from 'antd'
+import { getCase, changeCaseStatus, assignLawyer, getCaseCloseCheck } from '@/api/case'
 import { getClient } from '@/api/client'
 import DocumentList from '@/components/common/DocumentList'
 import BillingCard from '@/components/common/BillingCard'
@@ -11,8 +11,8 @@ import TimelineItem from '@/components/common/TimelineItem'
 import { useDocumentStore } from '@/stores/documentStore'
 import { useBillingStore } from '@/stores/billingStore'
 import { useUserStore } from '@/stores/userStore'
-import { CaseStatusOptions, CaseTypeOptions } from '@/constants/case'
-import type { CaseItem, Client } from '@/types'
+import { CaseStatusOptions, CaseStatusText, CaseTypeOptions, CaseStatus } from '@/constants/case'
+import type { CaseItem, Client, CaseCloseCheck } from '@/types'
 
 export default function CaseDetail() {
   const { id } = useParams()
@@ -21,6 +21,7 @@ export default function CaseDetail() {
   const [client, setClient] = useState<Client | null>(null)
   const [status, setStatus] = useState('')
   const [lawyer, setLawyer] = useState<number>()
+  const [closeCheck, setCloseCheck] = useState<CaseCloseCheck | null>(null)
   const docStore = useDocumentStore()
   const billingStore = useBillingStore()
   const userStore = useUserStore()
@@ -41,12 +42,24 @@ export default function CaseDetail() {
     }
     docStore.fetchByCase(caseId)
     billingStore.fetchByCase(caseId)
+    const checkRes: any = await getCaseCloseCheck(caseId)
+    setCloseCheck(checkRes.data)
   }
 
   async function onStatusChange() {
-    await changeCaseStatus(caseId, status)
-    message.success('状态已更新')
-    load()
+    // 前端兜底：两条结案前置条件都满足才放行结案请求（后端对管理员同样强制校验）。
+    if (status === CaseStatus.CLOSED && item?.status !== CaseStatus.CLOSED && closeCheck && !closeCheck.can_close) {
+      message.error('案件不满足结案条件，请先解除全部阻塞项')
+      return
+    }
+    try {
+      await changeCaseStatus(caseId, status)
+      message.success('状态已更新')
+      load()
+    } catch {
+      // 失败文案由请求拦截器统一提示（含后端返回的阻塞原因明细），本地状态回退为案件当前状态。
+      if (item) setStatus(item.status)
+    }
   }
 
   async function onAssign() {
@@ -57,6 +70,10 @@ export default function CaseDetail() {
   }
 
   if (!item) return null
+
+  const closingBlocked =
+    item.status !== CaseStatus.CLOSED && closeCheck !== null && !closeCheck.can_close
+  const closingSelected = status === CaseStatus.CLOSED && item.status !== CaseStatus.CLOSED
 
   return (
     <Card>
@@ -74,7 +91,7 @@ export default function CaseDetail() {
               <>
                 <Descriptions bordered column={2} size="small">
                   <Descriptions.Item label="案号">{item.case_no}</Descriptions.Item>
-                  <Descriptions.Item label="状态">{item.status}</Descriptions.Item>
+                  <Descriptions.Item label="状态">{CaseStatusText[item.status] || item.status}</Descriptions.Item>
                   <Descriptions.Item label="类型">{item.case_type}</Descriptions.Item>
                   <Descriptions.Item label="主办律师">#{item.lead_lawyer_id}</Descriptions.Item>
                   <Descriptions.Item label="受理日期">{item.accept_date || '-'}</Descriptions.Item>
@@ -84,8 +101,32 @@ export default function CaseDetail() {
                 <PermissionGuard roles={['admin', 'lawyer']}>
                   <Space style={{ marginTop: 16 }}>
                     <Select value={status} style={{ width: 150 }} options={CaseStatusOptions} onChange={setStatus} />
-                    <Button type="primary" onClick={onStatusChange}>更新状态</Button>
+                    <Button
+                      type="primary"
+                      onClick={onStatusChange}
+                      disabled={closingSelected && closingBlocked}
+                    >
+                      更新状态
+                    </Button>
+                    {item.status !== CaseStatus.CLOSED && closeCheck?.can_close && (
+                      <Tag color="success">结案条件已满足</Tag>
+                    )}
                   </Space>
+                  {closingBlocked && (
+                    <Alert
+                      style={{ marginTop: 8 }}
+                      type="warning"
+                      showIcon
+                      message="案件暂不满足结案条件，结案入口已锁定"
+                      description={
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {closeCheck.blocking_reasons.map((reason, idx) => (
+                            <li key={idx}>{reason}</li>
+                          ))}
+                        </ul>
+                      }
+                    />
+                  )}
                   <Space style={{ marginTop: 8 }}>
                     <Select
                       placeholder="分配主办律师"

@@ -127,6 +127,21 @@ func (h *CaseHandler) ChangeStatus(c *gin.Context) {
 	OK(c, cs)
 }
 
+// CloseCheck 结案前置校验：返回缺少的材料、待支付账单笔数与金额合计及阻塞原因。
+func (h *CaseHandler) CloseCheck(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		Fail(c, http.StatusBadRequest, constants.CodeBadRequest, "Case[id] close check: invalid id")
+		return
+	}
+	result, err := h.svc.CloseCheck(id)
+	if err != nil {
+		h.wrapError(c, err, "Case close check failed")
+		return
+	}
+	OK(c, result)
+}
+
 // Assign 分配律师。
 func (h *CaseHandler) Assign(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -152,6 +167,10 @@ func (h *CaseHandler) wrapError(c *gin.Context, err error, ctx string) {
 	if errors.As(err, &appErr) {
 		c.Set("audit_detail", appErr.Message)
 		h.logger.Warn("case handler error", "context", ctx, "error", appErr.Error())
+		if appErr.Details != nil {
+			FailWithDetails(c, appErrorStatus(appErr.Code), appErr.Code, appErr.Message, appErr.Details)
+			return
+		}
 		Fail(c, appErrorStatus(appErr.Code), appErr.Code, appErr.Message)
 		return
 	}

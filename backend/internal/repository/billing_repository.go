@@ -72,6 +72,21 @@ func (r *BillingRepository) ListByCase(caseID uint64) ([]model.Billing, error) {
 	return list, nil
 }
 
+// CountAndSumPendingByCase 统计某案件待支付（pending）账单的笔数与金额合计（结案校验用）。
+func (r *BillingRepository) CountAndSumPendingByCase(caseID uint64) (int64, float64, error) {
+	var result struct {
+		Count int64
+		Total float64
+	}
+	if err := r.db.Model(&model.Billing{}).
+		Select("COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total").
+		Where("case_id = ? AND status = ?", caseID, "pending").
+		Scan(&result).Error; err != nil {
+		return 0, 0, fmt.Errorf("count pending billings by case: %w", err)
+	}
+	return result.Count, result.Total, nil
+}
+
 // Update 更新账单。
 func (r *BillingRepository) Update(b *model.Billing) error {
 	if err := r.db.Save(b).Error; err != nil {

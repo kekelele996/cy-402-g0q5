@@ -35,6 +35,16 @@ export interface CaseItem {
   created_at: string
 }
 
+// 结案前置校验结果（与后端 dto.CloseCheckResult 对应）。
+export interface CaseCloseCheck {
+  can_close: boolean
+  has_judgment: boolean
+  missing_materials: string[]
+  pending_billing_count: number
+  pending_billing_amount: number
+  blocking_reasons: string[]
+}
+
 export interface DocumentItem {
   id: number
   title: string

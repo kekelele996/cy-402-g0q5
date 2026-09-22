@@ -50,7 +50,7 @@ func main() {
 
 	userSvc := service.NewUserService(userRepo, logger)
 	clientSvc := service.NewClientService(clientRepo, caseRepo, logger)
-	caseSvc := service.NewCaseService(caseRepo, clientRepo, userRepo, logger)
+	caseSvc := service.NewCaseService(caseRepo, clientRepo, userRepo, documentRepo, billingRepo, logger)
 	documentSvc := service.NewDocumentService(documentRepo, caseRepo, logger)
 	billingSvc := service.NewBillingService(billingRepo, caseRepo, clientRepo, logger)
 

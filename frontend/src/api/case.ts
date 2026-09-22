@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { CaseItem } from '@/types'
+import type { CaseItem, CaseCloseCheck } from '@/types'
 
 export function listCases(params: Record<string, unknown>) {
   return request.get('/cases', { params })
@@ -7,6 +7,10 @@ export function listCases(params: Record<string, unknown>) {
 
 export function getCase(id: number) {
   return request.get(`/cases/${id}`)
+}
+
+export function getCaseCloseCheck(id: number) {
+  return request.get(`/cases/${id}/close-check`)
 }
 
 export function createCase(data: Partial<CaseItem>) {
